@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ClipFast — Turn Long Videos Into Short Clips</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Clerk -->
+<script>
+  window.__clerk_publishable_key = "PASTE_YOUR_CLERK_PUBLISHABLE_KEY_HERE";
+</script>
+<script src="https://unpkg.com/@clerk/clerk-js@5/dist/clerk.browser.js" crossorigin="anonymous"></script>
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0f;color:#e8e8f0;font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:#1a9e6e20}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:3px}
+input[type=range]{accent-color:#1a9e6e}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.pdot{animation:pd 1.5s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.3}}
+#clerk-modal .cl-rootBox{z-index:9999}
+</style>
+</head>
+<body>
+<div id="clerk-modal"></div>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback}=React;
+const API=window.location.origin;
+
+// ── Icons ──────────────────────────────────────────────────────────────
+const Ic={
+  Link:(p)=><svg width={p.s||14} height={p.s||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
+  Upload:(p)=><svg width={p.s||14} height={p.s||14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  Spin:(p)=><svg className="spin" width={p.s||16} height={p.s||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+  Down:(p)=><svg width={p.s||13} height={p.s||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  Clock:(p)=><svg width={p.s||10} height={p.s||10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  Trend:(p)=><svg width={p.s||10} height={p.s||10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  Reset:(p)=><svg width={p.s||13} height={p.s||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
+  Cd:(p)=><svg width={p.s||13} height={p.s||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+  Cu:(p)=><svg width={p.s||13} height={p.s||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>,
+  Chk:(p)=><svg width={p.s||13} height={p.s||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  Cap:(p)=><svg width={p.s||12} height={p.s||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h2M7 11h6M14 15h3"/></svg>,
+  Crop:(p)=><svg width={p.s||12} height={p.s||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>,
+  Sci:(p)=><svg width={p.s||12} height={p.s||12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>,
+  Shield:(p)=><svg width={p.s||16} height={p.s||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  Zap:(p)=><svg width={p.s||16} height={p.s||16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  Star:(p)=><svg width={p.s||16} height={p.s||16} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+};
+
+function Logo({size=26}){
+  return <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="9" fill="#1a9e6e"/>
+    <path d="M9 12.5L23 12.5" stroke="white" strokeWidth="2.4" strokeLinecap="round"/>
+    <path d="M9 19.5L17 19.5" stroke="white" strokeWidth="2.4" strokeLinecap="round" opacity="0.55"/>
+    <circle cx="23" cy="19.5" r="2.6" stroke="white" strokeWidth="2.2"/>
+  </svg>;
+}
+
+// ── Clerk hook ─────────────────────────────────────────────────────────
+function useClerk(){
+  const [clerk,setClerk]=useState(null);
+  const [user,setUser]=useState(null);
+  const [token,setToken]=useState(null);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    async function init(){
+      try{
+        const cl=window.Clerk;
+        if(!cl){setLoading(false);return;}
+        await cl.load();
+        setClerk(cl);
+        if(cl.user){
+          setUser(cl.user);
+          const t=await cl.session.getToken();
+          setToken(t);
+        }
+        cl.addListener(({user:u,session:s})=>{
+          setUser(u||null);
+          if(s)s.getToken().then(setToken).catch(()=>setToken(null));
+          else setToken(null);
+        });
+      }catch(e){console.error("Clerk init error",e);}
+      setLoading(false);
+    }
+    init();
+  },[]);
+
+  const signIn=()=>clerk&&clerk.openSignIn({afterSignInUrl:window.location.href});
+  const signUp=()=>clerk&&clerk.openSignUp({afterSignUpUrl:window.location.href});
+  const signOut=()=>clerk&&clerk.signOut();
+
+  return {clerk,user,token,loading,signIn,signUp,signOut};
+}
+
+// ── API helper ─────────────────────────────────────────────────────────
+function useApi(token){
+  const authHeaders=()=>token?{Authorization:`Bearer ${token}`}:{};
+
+  async function get(path){
+    const r=await fetch(`${API}${path}`,{headers:authHeaders()});
+    if(!r.ok)throw new Error(await r.text());
+    return r.json();
+  }
+
+  async function post(path,body,isForm=false){
+    const headers=authHeaders();
+    const r=await fetch(`${API}${path}`,{
+      method:"POST",
+      headers:isForm?headers:{...headers,"Content-Type":"application/json"},
+      body:isForm?body:JSON.stringify(body),
+    });
+    if(!r.ok){const t=await r.text();throw new Error(t);}
+    return r.json();
+  }
+
+  return {get,post};
+}
+
+// ── Usage Bar ──────────────────────────────────────────────────────────
+function UsageBar({userInfo,onUpgrade}){
+  if(!userInfo)return null;
+  const isFree=userInfo.plan==="free";
+  const used=isFree&&userInfo.videos_left===0;
+  const pct=isFree?(used?100:0):Math.min(100,Math.round(((userInfo.minutes_limit-userInfo.minutes_remaining)/userInfo.minutes_limit)*100));
+  const low=pct>=80;
+  return <div className="bg-white/[0.03] border border-white/8 rounded-xl px-4 py-3 mb-4 flex items-center gap-4">
+    <div className="flex-1 min-w-0">
+      <div className="flex justify-between text-xs mb-1.5">
+        <span className="text-white/40 capitalize font-medium">{userInfo.plan} plan</span>
+        {isFree
+          ?<span className={used?"text-amber-400 font-medium":"text-[#2fc285]"}>{used?"Free video used":"1 free video remaining"}</span>
+          :<span className={low?"text-amber-400":"text-white/40"}>{userInfo.minutes_remaining} min left this month</span>
+        }
+      </div>
+      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`,background:low?"#f59e0b":"#1a9e6e"}}/>
+      </div>
+    </div>
+    {isFree&&<button onClick={onUpgrade} className="text-xs px-3 py-1.5 rounded-lg bg-[#1a9e6e] text-white font-medium whitespace-nowrap hover:bg-[#178a5e] transition-colors flex-shrink-0">Upgrade</button>}
+  </div>;
+}
+
+// ── Progress Bar ───────────────────────────────────────────────────────
+const STEPS=[{label:"Downloading",min:0,max:24},{label:"Transcribing",min:25,max:59},{label:"AI Analysis",min:60,max:74},{label:"Cutting",min:75,max:100}];
+function ProgressBar({progress,message}){
+  const active=STEPS.findIndex(s=>progress>=s.min&&progress<=s.max);
+  return <div className="py-16 text-center">
+    <div className="w-12 h-12 rounded-2xl bg-[#1a9e6e]/10 border border-[#1a9e6e]/20 flex items-center justify-center mx-auto mb-6 text-[#2fc285]"><Ic.Spin s={20}/></div>
+    <h2 className="text-white font-medium mb-1 text-lg">Processing your video</h2>
+    <p className="text-white/30 text-sm mb-10">{message||"Starting..."}</p>
+    <div className="flex justify-center gap-2 mb-8 flex-wrap">
+      {STEPS.map((s,i)=>{
+        const done=progress>s.max,act=i===active;
+        return <div key={s.label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${done?"bg-[#1a9e6e]/10 text-[#2fc285]":act?"bg-white/8 text-white":"text-white/20"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${done?"bg-[#2fc285]":act?"bg-white pdot":"bg-white/10"}`}/>{s.label}
+        </div>;
+      })}
+    </div>
+    <div className="max-w-md mx-auto">
+      <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+        <div className="h-full bg-[#1a9e6e] rounded-full transition-all duration-700" style={{width:`${progress}%`}}/>
+      </div>
+      <div className="text-right text-xs text-white/20 mt-2">{progress}%</div>
+    </div>
+  </div>;
+}
+
+// ── Clip Editor ────────────────────────────────────────────────────────
+const ASPECTS=[{id:"9:16",label:"9:16",sub:"TikTok / Reels"},{id:"1:1",label:"1:1",sub:"Instagram Post"},{id:"16:9",label:"16:9",sub:"YouTube"},{id:"4:5",label:"4:5",sub:"IG Portrait"}];
+const CAP_STYLES=[{id:"tiktok_white",label:"TikTok White",color:"#fff"},{id:"fire_yellow",label:"Fire Yellow",color:"#ff0"},{id:"clean_white",label:"Clean White",color:"#aaffaa"}];
+
+async function pollJob(api,jobId,cb){
+  return new Promise(resolve=>{
+    const iv=setInterval(async()=>{
+      try{
+        const d=await api.get(`/api/status/${jobId}`);
+        if(d.status==="done"||d.status==="error"){clearInterval(iv);cb(d);resolve();}
+      }catch{clearInterval(iv);resolve();}
+    },1500);
+  });
+}
+
+function ClipEditor({clip,isFree,api}){
+  const [action,setAction]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [done,setDone]=useState(null);
+  const [capStyle,setCapStyle]=useState("tiktok_white");
+  const [styleOpen,setStyleOpen]=useState(false);
+  const [aspect,setAspect]=useState("9:16");
+  const [ts,setTs]=useState(0);
+  const [te,setTe]=useState(clip.duration_seconds||60);
+  const dur=clip.duration_seconds||60;
+  const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+
+  async function run(path,body,isJob){
+    setLoading(true);
+    try{
+      const d=await api.post(path,body);
+      if(isJob){await pollJob(api,d.job_id,j=>{if(j.status==="done"&&j.clips?.[0])setDone(j.clips[0].file_url);});}
+      else setDone(d.file_url);
+    }catch(e){alert(e.message);}
+    setLoading(false);
+  }
+
+  return <div className="mt-4 border-t border-white/5 pt-4">
+    <div className="flex gap-2 mb-4">
+      {[{id:"captions",I:Ic.Cap,l:"Captions"},{id:"reframe",I:Ic.Crop,l:"Reframe"},{id:"trim",I:Ic.Sci,l:"Trim"}].map(({id,I,l})=>(
+        <button key={id} onClick={()=>setAction(action===id?null:id)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${action===id?"bg-[#1a9e6e]/15 border-[#1a9e6e]/30 text-[#2fc285]":"border-white/8 text-white/40 hover:text-white/60"}`}>
+          <I/>{l}
+        </button>
+      ))}
+    </div>
+
+    {action==="captions"&&<div className="bg-white/[0.02] rounded-xl p-4 mb-3 space-y-3">
+      <p className="text-xs text-white/40">Pick a caption style</p>
+      <div className="relative">
+        <button onClick={()=>setStyleOpen(!styleOpen)} className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.04] border border-white/8 rounded-lg text-sm text-white/70">
+          <span className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full border border-white/20" style={{background:CAP_STYLES.find(s=>s.id===capStyle)?.color}}/>
+            {CAP_STYLES.find(s=>s.id===capStyle)?.label}
+          </span><Ic.Cd/>
+        </button>
+        {styleOpen&&<div className="absolute z-10 w-full mt-1 bg-[#141420] border border-white/10 rounded-lg overflow-hidden shadow-xl">
+          {CAP_STYLES.map(s=>(
+            <button key={s.id} onClick={()=>{setCapStyle(s.id);setStyleOpen(false);}} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:bg-white/5 hover:text-white transition-colors">
+              <span className="w-3 h-3 rounded-full border border-white/20" style={{background:s.color}}/>{s.label}
+              {capStyle===s.id&&<span className="ml-auto text-[#2fc285]"><Ic.Chk/></span>}
+            </button>
+          ))}
+        </div>}
+      </div>
+      {isFree&&<div className="flex items-center gap-2 p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-lg">
+        <span className="text-amber-400 text-[10px] flex-1">Free plan adds a ClipFast watermark.</span>
+      </div>}
+      <button onClick={()=>run("/api/add-captions",{clip_url:clip.file_url,style:capStyle},true)} disabled={loading}
+        className="w-full py-2 rounded-lg bg-[#1a9e6e] hover:bg-[#178a5e] disabled:opacity-40 text-white text-xs font-medium flex items-center justify-center gap-2">
+        {loading?<><Ic.Spin s={12}/>Processing...</>:"Burn captions"}
+      </button>
+    </div>}
+
+    {action==="reframe"&&<div className="bg-white/[0.02] rounded-xl p-4 mb-3 space-y-3">
+      <p className="text-xs text-white/40">Choose output format</p>
+      <div className="grid grid-cols-2 gap-2">
+        {ASPECTS.map(a=>(
+          <button key={a.id} onClick={()=>setAspect(a.id)}
+            className={`p-2 rounded-lg border text-xs text-left transition-all ${aspect===a.id?"border-[#1a9e6e]/40 bg-[#1a9e6e]/10 text-white":"border-white/8 text-white/40"}`}>
+            <div className="font-medium">{a.label}</div>
+            <div className="text-[10px] opacity-60 mt-0.5">{a.sub}</div>
+          </button>
+        ))}
+      </div>
+      <button onClick={()=>run("/api/reframe",{clip_url:clip.file_url,aspect},false)} disabled={loading}
+        className="w-full py-2 rounded-lg bg-[#1a9e6e] hover:bg-[#178a5e] disabled:opacity-40 text-white text-xs font-medium flex items-center justify-center gap-2">
+        {loading?<><Ic.Spin s={12}/>Processing...</>:`Export ${aspect}`}
+      </button>
+    </div>}
+
+    {action==="trim"&&<div className="bg-white/[0.02] rounded-xl p-4 mb-3 space-y-3">
+      <p className="text-xs text-white/40">Trim clip</p>
+      <div className="space-y-2">
+        <div className="flex justify-between text-[10px] text-white/30"><span>Start: {fmt(ts)}</span><span>End: {fmt(te)}</span></div>
+        <div><label className="text-[10px] text-white/30 mb-1 block">Start</label>
+          <input type="range" min="0" max={te-1} value={ts} step="0.5" onChange={e=>setTs(Number(e.target.value))} className="w-full"/></div>
+        <div><label className="text-[10px] text-white/30 mb-1 block">End</label>
+          <input type="range" min={ts+1} max={dur} value={te} step="0.5" onChange={e=>setTe(Number(e.target.value))} className="w-full"/></div>
+        <p className="text-[10px] text-white/20 text-center">Duration: {fmt(te-ts)}</p>
+      </div>
+      <button onClick={()=>run("/api/trim",{clip_url:clip.file_url,start_seconds:ts,end_seconds:te},false)} disabled={loading}
+        className="w-full py-2 rounded-lg bg-[#1a9e6e] hover:bg-[#178a5e] disabled:opacity-40 text-white text-xs font-medium flex items-center justify-center gap-2">
+        {loading?<><Ic.Spin s={12}/>Trimming...</>:"Export trimmed clip"}
+      </button>
+    </div>}
+
+    {done&&!loading&&<div className="flex items-center gap-2 mt-2 p-2 bg-[#1a9e6e]/10 border border-[#1a9e6e]/20 rounded-lg">
+      <span className="text-[#2fc285]"><Ic.Chk/></span>
+      <span className="text-xs text-[#2fc285] flex-1">Ready</span>
+      <a href={`${API}${done}`} download className="text-xs px-3 py-1 bg-[#1a9e6e]/20 text-[#2fc285] rounded-lg flex items-center gap-1">
+        <Ic.Down s={11}/> Download
+      </a>
+    </div>}
+  </div>;
+}
+
+// ── Results Panel ──────────────────────────────────────────────────────
+const PLAT={TikTok:"text-pink-400 bg-pink-400/10 border-pink-400/20",Reels:"text-purple-400 bg-purple-400/10 border-purple-400/20",Shorts:"text-red-400 bg-red-400/10 border-red-400/20",All:"text-[#2fc285] bg-[#1a9e6e]/10 border-[#1a9e6e]/20"};
+const TMAP={hot_take:"Hot take",story:"Story",tutorial:"Tutorial",reaction:"Reaction",insight:"Insight",funny:"Funny",controversy:"Controversy"};
+
+function ScoreRing({score}){
+  const c=score>=85?"#1a9e6e":score>=70?"#f59e0b":"#64748b";
+  return <div className="flex flex-col items-center flex-shrink-0">
+    <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold border-2" style={{borderColor:c,color:c}}>{score}</div>
+    <span className="text-[9px] text-white/20 mt-0.5">score</span>
+  </div>;
+}
+
+function ResultsPanel({clips,isFree,api,onReset,onUpgrade}){
+  const [expanded,setExpanded]=useState(null);
+  const [urls,setUrls]=useState({});
+  return <div>
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h2 className="text-white font-semibold text-xl">{clips.length} clips ready</h2>
+        <p className="text-white/30 text-sm mt-0.5">Sorted by viral potential</p>
+      </div>
+      <button onClick={onReset} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 text-sm transition-all">
+        <Ic.Reset/> New video
+      </button>
+    </div>
+
+    {isFree&&<div className="mb-5 p-4 bg-[#1a9e6e]/5 border border-[#1a9e6e]/20 rounded-xl flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-white mb-0.5">Liked what you saw?</p>
+        <p className="text-xs text-white/40">Upgrade for unlimited videos, no watermarks, and karaoke captions.</p>
+      </div>
+      <button onClick={onUpgrade} className="flex-shrink-0 px-4 py-2 bg-[#1a9e6e] hover:bg-[#178a5e] text-white text-sm font-medium rounded-xl transition-all whitespace-nowrap">
+        See plans
+      </button>
+    </div>}
+
+    <div className="flex flex-col gap-3">
+      {clips.map((clip,i)=>(
+        <div key={clip.clip_number} className="bg-white/[0.03] border border-white/8 rounded-2xl overflow-hidden">
+          <div className="p-5">
+            <div className="flex items-start gap-4">
+              <ScoreRing score={clip.viral_score}/>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  {i===0&&<span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a9e6e]/15 text-[#2fc285] font-medium border border-[#1a9e6e]/20">Top pick</span>}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${PLAT[clip.best_platform]||"text-white/40 bg-white/5 border-white/10"}`}>{clip.best_platform}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-white/40">{TMAP[clip.clip_type]||clip.clip_type}</span>
+                </div>
+                <h3 className="text-white font-medium text-sm leading-snug mb-1">{clip.title}</h3>
+                <p className="text-white/35 text-xs leading-relaxed mb-2.5">"{clip.hook}"</p>
+                <div className="flex items-center gap-4 text-[10px] text-white/20">
+                  <span className="flex items-center gap-1"><Ic.Clock/>{clip.start_time} → {clip.end_time}</span>
+                  <span className="flex items-center gap-1"><Ic.Trend/>{clip.duration_seconds}s</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                <a href={`${API}${urls[i]||clip.file_url}`} download={`clip_${clip.clip_number}.mp4`}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1a9e6e]/10 border border-[#1a9e6e]/20 text-[#2fc285] text-xs font-medium hover:bg-[#1a9e6e]/20 transition-all">
+                  <Ic.Down/> Download
+                </a>
+                <button onClick={()=>setExpanded(expanded===i?null:i)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-white/8 text-white/30 text-xs hover:border-white/15 transition-all">
+                  Edit {expanded===i?<Ic.Cu/>:<Ic.Cd/>}
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-white/5">
+              <p className="text-xs text-white/25"><span className="text-white/40 font-medium">Why it works: </span>{clip.why_viral}</p>
+            </div>
+            <div className="mt-2 bg-white/[0.02] rounded-xl p-3">
+              <p className="text-[10px] text-white/20 uppercase tracking-wide font-medium mb-1">Suggested caption</p>
+              <p className="text-xs text-white/45 leading-relaxed">{clip.suggested_caption}</p>
+            </div>
+          </div>
+          {expanded===i&&<div className="px-5 pb-5 border-t border-white/5 bg-white/[0.01]">
+            <ClipEditor clip={{...clip,file_url:urls[i]||clip.file_url}} isFree={isFree} api={api}/>
+          </div>}
+        </div>
+      ))}
+    </div>
+    <p className="text-white/15 text-xs text-center mt-6">Files expire in 24 hours — download to keep them</p>
+  </div>;
+}
+
+// ── Pricing Page ───────────────────────────────────────────────────────
+function PricingPage({api,onSignIn,userInfo}){
+  const [annual,setAnnual]=useState(false);
+  const [loading,setLoading]=useState(null);
+
+  async function checkout(plan){
+    if(!userInfo){onSignIn();return;}
+    setLoading(plan);
+    try{
+      const d=await api.post("/api/checkout",{plan});
+      if(d.checkout_url)window.location.href=d.checkout_url;
+    }catch(e){alert("Payment error: "+e.message);}
+    setLoading(null);
+  }
+
+  const P={creator:{m:9,a:6},pro:{m:19,a:12}};
+  const plans=[
+    {key:"free",name:"Free",price:"$0",billed:"",desc:"Try it — no card needed.",
+     feats:["1 full video free","Up to 7 clips","Watermark on downloads"],locked:["Captions locked","9:16 only"],
+     cta:"Get started",action:()=>window._setPage("home"),featured:false},
+    {key:"creator",name:"Creator",price:`$${annual?P.creator.a:P.creator.m}`,billed:annual?"Billed $70/year":"Billed monthly",
+     desc:"For creators posting consistently.",
+     feats:["200 min/month","No watermark","Karaoke captions","All aspect ratios","Trim editor","Projects saved forever"],locked:[],
+     cta:"Start 7-day free trial",action:()=>checkout("creator"),featured:true},
+    {key:"pro",name:"Pro",price:`$${annual?P.pro.a:P.pro.m}`,billed:annual?"Billed $148/year":"Billed monthly",
+     desc:"For agencies and power users.",
+     feats:["600 min/month","Everything in Creator","Priority processing","3 team seats","API access"],locked:[],
+     cta:"Start 7-day free trial",action:()=>checkout("pro"),featured:false},
+  ];
+
+  return <div className="max-w-3xl mx-auto px-6 py-12">
+    <div className="text-center mb-10">
+      <p className="text-xs text-white/30 uppercase tracking-widest mb-3 font-medium">Pricing</p>
+      <h2 className="text-3xl font-semibold text-white mb-3 tracking-tight">Pay for what you use</h2>
+      <p className="text-white/40">No confusing credits. No projects deleted on cancel.</p>
+    </div>
+    <div className="flex items-center justify-center gap-3 mb-8">
+      <span className={`text-sm ${!annual?"text-white font-medium":"text-white/40"}`}>Monthly</span>
+      <button onClick={()=>setAnnual(!annual)} className={`w-10 h-5 rounded-full relative transition-colors ${annual?"bg-[#1a9e6e]":"bg-white/15"}`}>
+        <span className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${annual?"left-5":"left-0.5"}`}/>
+      </button>
+      <span className={`text-sm ${annual?"text-white font-medium":"text-white/40"}`}>Annual</span>
+      <span className="text-xs px-2 py-0.5 rounded-full bg-[#1a9e6e]/15 border border-[#1a9e6e]/30 text-[#2fc285] font-medium">Save 35%</span>
+    </div>
+    <div className="grid grid-cols-3 gap-4 mb-10">
+      {plans.map(p=>(
+        <div key={p.key} className={`rounded-2xl p-5 flex flex-col relative ${p.featured?"border-2 border-[#1a9e6e] bg-white/[0.04]":"border border-white/8 bg-white/[0.02]"}`}>
+          {p.featured&&<div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1a9e6e] text-white text-[10px] font-semibold px-3 py-1 rounded-full whitespace-nowrap">Most popular</div>}
+          <div className="mb-5">
+            <div className="text-sm font-semibold text-white mb-1">{p.name}</div>
+            <div className="text-white/35 text-xs mb-4 leading-relaxed">{p.desc}</div>
+            <div className="flex items-baseline gap-1 mb-0.5">
+              <span className="text-2xl font-semibold text-white">{p.price}</span>
+              {p.key!=="free"&&<span className="text-white/40 text-xs">/mo</span>}
+            </div>
+            <div className="text-[10px] text-white/30 h-4">{p.billed}</div>
+          </div>
+          <button onClick={p.action} disabled={!!loading}
+            className={`w-full py-2.5 rounded-xl text-sm font-medium mb-5 transition-all ${p.featured?"bg-[#1a9e6e] hover:bg-[#178a5e] text-white":"border border-white/15 text-white/70 hover:border-white/30 hover:text-white"} disabled:opacity-50`}>
+            {loading===p.key?<span className="flex items-center justify-center gap-2"><Ic.Spin s={13}/>Processing...</span>:p.cta}
+          </button>
+          <ul className="space-y-2 flex-1">
+            {p.feats.map(f=><li key={f} className="flex items-start gap-2 text-xs text-white/60">
+              <span className="text-[#1a9e6e] mt-0.5 flex-shrink-0"><Ic.Chk s={11}/></span>{f}
+            </li>)}
+            {p.locked.map(f=><li key={f} className="flex items-start gap-2 text-xs text-white/20">
+              <span className="mt-0.5 flex-shrink-0 opacity-30"><Ic.Chk s={11}/></span>{f}
+            </li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
+    <div className="grid grid-cols-3 gap-4">
+      {[{I:Ic.Shield,t:"Secure payments",d:"Card data never touches our servers. Stripe handles everything."},{I:Ic.Zap,t:"Cancel anytime",d:"No contracts. Cancel in one click."},{I:Ic.Star,t:"Projects kept forever",d:"Your clips stay available even after you cancel."}].map(({I,t,d})=>(
+        <div key={t} className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+          <div className="text-[#1a9e6e] mb-2"><I/></div>
+          <div className="text-sm font-medium text-white mb-1">{t}</div>
+          <div className="text-xs text-white/35 leading-relaxed">{d}</div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ── Main App ───────────────────────────────────────────────────────────
+function App(){
+  const {user,token,loading:clerkLoading,signIn,signOut}=useClerk();
+  const api=useApi(token);
+  const [page,setPage]=useState("home");
+  const [userInfo,setUserInfo]=useState(null);
+  const [tab,setTab]=useState("url");
+  const [url,setUrl]=useState("");
+  const [title,setTitle]=useState("");
+  const [file,setFile]=useState(null);
+  const [stage,setStage]=useState("idle");
+  const [progress,setProgress]=useState(0);
+  const [message,setMessage]=useState("");
+  const [clips,setClips]=useState([]);
+  const [error,setError]=useState("");
+  const fileRef=useRef(null);
+
+  useEffect(()=>{window._setPage=setPage;},[]);
+
+  useEffect(()=>{
+    if(user&&token){
+      api.get("/api/me").then(d=>{setUserInfo(d);}).catch(()=>{});
+    }else{
+      setUserInfo(null);
+    }
+  },[user,token]);
+
+  async function submit(){
+    if(!user){signIn();return;}
+    setStage("processing");setError("");setClips([]);setProgress(0);
+    try{
+      const form=new FormData();
+      form.append("video_title",title||"My Video");
+      let d;
+      if(tab==="url"){form.append("youtube_url",url);d=await api.post("/api/process-url",form,true);}
+      else{if(!file)return;form.append("file",file);d=await api.post("/api/process-file",form,true);}
+      if(d.detail){setStage("error");setError(d.detail);return;}
+      pollStatus(d.job_id);
+    }catch(e){setStage("error");setError(e.message||"Could not reach server.");}
+  }
+
+  function pollStatus(id){
+    const iv=setInterval(async()=>{
+      try{
+        const d=await api.get(`/api/status/${id}`);
+        setProgress(d.progress);setMessage(d.message);
+        if(d.status==="done"){clearInterval(iv);setClips(d.clips);setStage("done");api.get("/api/me").then(setUserInfo).catch(()=>{});}
+        else if(d.status==="error"){clearInterval(iv);setStage("error");setError(d.message);}
+      }catch{clearInterval(iv);setStage("error");setError("Lost connection.");}
+    },1500);
+  }
+
+  const isFree=!userInfo||userInfo.plan==="free";
+  const canSubmit=stage!=="processing"&&((tab==="url"&&url.trim())||(tab==="file"&&file));
+
+  if(clerkLoading)return <div className="min-h-screen flex items-center justify-center"><Ic.Spin s={24}/></div>;
+
+  return <main className="min-h-screen">
+    <header className="border-b border-white/5 px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0f]/95 backdrop-blur z-40">
+      <button onClick={()=>setPage("home")} className="flex items-center gap-2">
+        <Logo size={26}/>
+        <span className="font-semibold text-white tracking-tight">ClipFast</span>
+        <span className="text-xs text-white/30 ml-1 border border-white/10 rounded px-1.5 py-0.5">beta</span>
+      </button>
+      <nav className="flex items-center gap-5">
+        <button onClick={()=>setPage("pricing")} className={`text-sm transition-colors ${page==="pricing"?"text-white":"text-white/40 hover:text-white/70"}`}>Pricing</button>
+        {user
+          ?<div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {user.imageUrl?<img src={user.imageUrl} alt={user.fullName||""} className="w-7 h-7 rounded-full border border-white/10"/>
+                :<div className="w-7 h-7 rounded-full bg-[#1a9e6e]/20 border border-[#1a9e6e]/30 flex items-center justify-center text-[#2fc285] text-xs font-medium">{(user.firstName||"U")[0]}</div>}
+              <span className="text-sm text-white/60 hidden sm:block">{user.firstName||user.emailAddresses?.[0]?.emailAddress}</span>
+            </div>
+            <button onClick={signOut} className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:border-white/20 hover:text-white/60 transition-all">Sign out</button>
+          </div>
+          :<button onClick={signIn} className="px-3 py-1.5 rounded-lg border border-white/10 text-white/60 hover:border-white/20 hover:text-white/80 transition-all text-sm">Sign in</button>
+        }
+      </nav>
+    </header>
+
+    {page==="pricing"&&<PricingPage api={api} onSignIn={signIn} userInfo={userInfo}/>}
+
+    {page==="home"&&<div className="max-w-3xl mx-auto px-6 py-14">
+      {stage==="idle"&&<React.Fragment>
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#1a9e6e]/30 bg-[#1a9e6e]/10 text-[#2fc285] text-xs mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#2fc285]"/>Built on Claude and AssemblyAI
+          </div>
+          <h1 className="text-4xl font-semibold text-white mb-4 tracking-tight leading-tight">
+            Stop scrubbing through hours<br/>of footage for the good part
+          </h1>
+          <p className="text-white/40 text-lg">Drop in a video. Get back the moments people actually stop scrolling for.</p>
+        </div>
+
+        {user&&userInfo&&<UsageBar userInfo={userInfo} onUpgrade={()=>setPage("pricing")}/>}
+
+        {!user&&<div className="mb-5 p-4 bg-white/[0.03] border border-white/8 rounded-2xl flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-white font-medium mb-0.5">Try ClipFast free</p>
+            <p className="text-xs text-white/35">Sign in to process your first video — no card needed.</p>
+          </div>
+          <button onClick={signIn} className="flex-shrink-0 px-4 py-2 bg-[#1a9e6e] hover:bg-[#178a5e] text-white font-medium text-sm rounded-xl transition-all">Sign in</button>
+        </div>}
+
+        <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6">
+          <div className="flex gap-1 mb-5 bg-white/[0.04] rounded-xl p-1">
+            {["url","file"].map(t=>(
+              <button key={t} onClick={()=>setTab(t)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${tab===t?"bg-white/8 text-white":"text-white/40 hover:text-white/60"}`}>
+                {t==="url"?<Ic.Link/>:<Ic.Upload/>}{t==="url"?"YouTube URL":"Upload file"}
+              </button>
+            ))}
+          </div>
+
+          {tab==="url"
+            ?<div className="mb-4"><input type="url" placeholder="https://youtube.com/watch?v=..." value={url} onChange={e=>setUrl(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/8 rounded-xl px-4 py-3 text-white placeholder-white/20 text-sm outline-none focus:border-[#1a9e6e]/50 transition-colors"/></div>
+            :<div onClick={()=>fileRef.current?.click()} className="mb-4 border border-dashed border-white/10 rounded-xl p-8 text-center cursor-pointer hover:border-white/20 transition-all">
+              <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={e=>setFile(e.target.files[0]||null)}/>
+              <div className="flex justify-center mb-2 text-white/20"><Ic.Upload s={20}/></div>
+              {file?<p className="text-sm text-white/60">{file.name}</p>
+                :<><p className="text-sm text-white/40">Drop a video or click to browse</p><p className="text-xs text-white/20 mt-1">MP4, MOV, MKV up to 500MB</p></>}
+            </div>
+          }
+
+          <div className="mb-5">
+            <input type="text" placeholder="Video title (optional)" value={title} onChange={e=>setTitle(e.target.value)}
+              className="w-full bg-white/[0.04] border border-white/8 rounded-xl px-4 py-3 text-white placeholder-white/20 text-sm outline-none focus:border-[#1a9e6e]/50 transition-colors"/>
+          </div>
+
+          <button onClick={submit} disabled={!canSubmit}
+            className="w-full py-3 rounded-xl bg-[#1a9e6e] hover:bg-[#178a5e] disabled:opacity-30 disabled:cursor-not-allowed text-white font-medium text-sm transition-all active:scale-[0.99]">
+            {user?"Find the clips":"Sign in to get started"}
+          </button>
+
+          <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/5">
+            {[["3–7","clips per video"],["30–90s","ideal length"],["~3 min","avg processing"]].map(([v,l])=>(
+              <div key={l} className="text-center">
+                <div className="text-white font-semibold text-lg">{v}</div>
+                <div className="text-white/30 text-xs mt-0.5">{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </React.Fragment>}
+
+      {stage==="processing"&&<ProgressBar progress={progress} message={message}/>}
+
+      {stage==="error"&&<div className="text-center py-16">
+        <div className="text-red-400 mb-2 font-medium">Something went wrong</div>
+        <p className="text-white/30 text-sm mb-6">{error}</p>
+        {error.toLowerCase().includes("upgrade")&&
+          <button onClick={()=>setPage("pricing")} className="px-4 py-2 rounded-lg bg-[#1a9e6e] text-white text-sm mr-3 hover:bg-[#178a5e] transition-colors">View plans</button>}
+        <button onClick={()=>setStage("idle")} className="px-4 py-2 rounded-lg border border-white/10 text-white/60 text-sm transition-all">Try again</button>
+      </div>}
+
+      {stage==="done"&&<ResultsPanel clips={clips} isFree={isFree} api={api}
+        onReset={()=>{setStage("idle");setClips([]);setUrl("");setFile(null);setTitle("");}}
+        onUpgrade={()=>setPage("pricing")}/>}
+    </div>}
+
+    <footer className="border-t border-white/5 px-6 py-5 flex items-center justify-between mt-8">
+      <span className="text-sm font-medium text-white/50">ClipFast</span>
+      <div className="flex gap-5 text-xs text-white/25">
+        <a href="#" className="hover:text-white/50 transition-colors">Privacy</a>
+        <a href="#" className="hover:text-white/50 transition-colors">Terms</a>
+        <a href="#" className="hover:text-white/50 transition-colors">Contact</a>
+      </div>
+    </footer>
+  </main>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
